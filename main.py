@@ -77,7 +77,7 @@ async def invite_to_household(
 ):
     return await crud.invite_to_household(db, household_id, invite.email, current_user.id)
 
-@app.post("/households/join")
+@app.post("/households/join", response_model=schemas.HouseholdResponse)
 def join_household(
     join_request: schemas.JoinHousehold,
     current_user: models.User = Depends(get_current_user),

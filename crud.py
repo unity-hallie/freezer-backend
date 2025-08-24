@@ -209,8 +209,9 @@ def join_household(db: Session, invite_code: str, user_id: int):
     
     household.members.append(user)
     db.commit()
+    db.refresh(household)
     
-    return {"message": f"Successfully joined {household.name}"}
+    return household
 
 def leave_household(db: Session, household_id: int, user_id: int):
     household = get_household_by_id(db, household_id)
