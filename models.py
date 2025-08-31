@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Text, Table
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Text, Table, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -17,12 +17,19 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=True)  # Nullable for Discord users
     full_name = Column(String(255), nullable=True)
     is_verified = Column(Boolean, default=False)
     verification_token = Column(String(255), nullable=True)
     password_reset_token = Column(String(255), nullable=True)
     password_reset_expires = Column(DateTime, nullable=True)
+    
+    # Discord OAuth fields
+    discord_id = Column(String(50), unique=True, nullable=True, index=True)
+    discord_username = Column(String(255), nullable=True)
+    discord_avatar = Column(String(255), nullable=True)
+    auth_provider = Column(String(20), default='email')  # 'email' or 'discord'
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     
     owned_households = relationship("Household", back_populates="owner")
@@ -69,6 +76,10 @@ class Item(Base):
     purchase_date = Column(DateTime, nullable=True)
     category = Column(String(100), nullable=True)  # meat, vegetables, dairy, etc.
     barcode = Column(String(50), nullable=True)
+    tags = Column(JSON, nullable=True, default=list)  # Data-driven tags array
+    custom_expiration_days = Column(Integer, nullable=True)  # Override location-based expiration
+    emoji = Column(String(10), nullable=True)  # Optional emoji override
+    date_added = Column(DateTime, nullable=True)  # Date when item was added (frontend usage)
     location_id = Column(Integer, ForeignKey("locations.id"), nullable=False)
     added_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)

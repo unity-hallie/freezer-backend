@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from main import app
 from database import get_db, Base
 import models
+from utils.test_data import create_test_user_data, TestDataLimiter
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
@@ -34,27 +35,31 @@ def test_read_main():
     assert response.json() == {"message": "Freezer App API"}
 
 def test_user_registration(setup_database):
+    # Use PII-protected test data
+    test_user = create_test_user_data()
     response = client.post(
         "/auth/register",
         json={
-            "email": "test@example.com",
-            "password": "testpassword123",
-            "full_name": "Test User"
+            "email": test_user["email"],
+            "password": test_user["password"],
+            "full_name": test_user["full_name"]
         }
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["email"] == "test@example.com"
+    assert data["email"] == test_user["email"]
     assert "id" in data
 
 def test_user_login(setup_database):
+    # Use PII-protected test data
+    test_user = create_test_user_data()
     # Register user first
     client.post(
         "/auth/register",
         json={
-            "email": "test@example.com", 
-            "password": "testpassword123",
-            "full_name": "Test User"
+            "email": test_user["email"], 
+            "password": test_user["password"],
+            "full_name": test_user["full_name"]
         }
     )
     

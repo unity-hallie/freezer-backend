@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 import models, schemas, auth
 import secrets
@@ -27,7 +27,8 @@ async def create_user(db: Session, user: schemas.UserCreate):
     db.refresh(db_user)
     
     # Send verification email
-    await send_verification_email(user.email, verification_token)
+    from email_service import send_verification_email
+    send_verification_email(user.email, verification_token)
     
     return db_user
 
@@ -130,7 +131,9 @@ def create_item(db: Session, item: schemas.ItemCreate, location_id: int, user_id
     return db_item
 
 def get_location_items(db: Session, location_id: int):
-    return db.query(models.Item).filter(models.Item.location_id == location_id).all()
+    return db.query(models.Item).options(
+        joinedload(models.Item.added_by)
+    ).filter(models.Item.location_id == location_id).all()
 
 def verify_email(db: Session, token: str):
     user = db.query(models.User).filter(models.User.verification_token == token).first()
@@ -155,7 +158,8 @@ async def request_password_reset(db: Session, email: str):
     db.commit()
     
     # Send password reset email
-    await send_password_reset_email(user.email, reset_token)
+    from email_service import send_password_reset_email
+    send_password_reset_email(user.email, reset_token, user.full_name or "User")
     
     return {"message": "Password reset email sent"}
 
@@ -255,3 +259,112 @@ def delete_location(db: Session, location_id: int):
     db.delete(db_location)
     db.commit()
     return {"message": "Location deleted successfully"}
+
+# Additional CRUD functions for item management
+def get_user_items(db: Session, user_id: int):
+    """Get all items from user's households"""
+    households = get_user_households(db, user_id)
+    items = []
+    for household in households:
+        locations = get_household_locations(db, household.id)
+        for location in locations:
+            location_items = get_location_items(db, location.id)
+            # Add household_id to each item for convenience
+            for item in location_items:
+                item.household_id = household.id
+            items.extend(location_items)
+    return items
+
+def get_user_locations(db: Session, user_id: int):
+    """Get all locations from user's households"""
+    households = get_user_households(db, user_id)
+    locations = []
+    for household in households:
+        household_locations = get_household_locations(db, household.id)
+        locations.extend(household_locations)
+    return locations
+
+def get_location_by_name(db: Session, household_id: int, location_name: str):
+    """Find location by name within a household"""
+    return db.query(models.Location).filter(
+        models.Location.household_id == household_id,
+        models.Location.name.ilike(f"%{location_name}%")
+    ).first()
+
+def get_item_by_id(db: Session, item_id: int):
+    """Get item by ID"""
+    return db.query(models.Item).filter(models.Item.id == item_id).first()
+
+def update_item(db: Session, item_id: int, item_update: schemas.ItemUpdate):
+    """Update an item"""
+    db_item = get_item_by_id(db, item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    for key, value in item_update.dict(exclude_unset=True).items():
+        setattr(db_item, key, value)
+    
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+def delete_item(db: Session, item_id: int):
+    """Delete an item"""
+    db_item = get_item_by_id(db, item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Item deleted successfully"}
+
+# Discord OAuth CRUD functions
+def get_user_by_discord_id(db: Session, discord_id: str):
+    """Get user by Discord ID"""
+    return db.query(models.User).filter(models.User.discord_id == discord_id).first()
+
+async def create_discord_user(db: Session, user_data: schemas.DiscordUserCreate):
+    """Create a new user from Discord OAuth"""
+    db_user = models.User(
+        email=user_data.email,
+        full_name=user_data.full_name,
+        discord_id=user_data.discord_id,
+        discord_username=user_data.discord_username,
+        discord_avatar=user_data.discord_avatar,
+        auth_provider='discord',
+        is_verified=True  # Discord accounts are pre-verified
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    # Create default household for Discord user
+    household_name = f"{user_data.full_name or user_data.discord_username}'s Household"
+    household = create_household(db, schemas.HouseholdCreate(
+        name=household_name,
+        description="Shared household inventory"
+    ), db_user.id)
+    
+    return db_user
+
+def link_discord_account(db: Session, user: models.User, discord_data: dict):
+    """Link Discord account to existing user"""
+    user.discord_id = discord_data["id"]
+    user.discord_username = discord_data["username"]
+    user.discord_avatar = discord_data.get("avatar")
+    
+    db.commit()
+    db.refresh(user)
+    return user
+
+def create_login_response(user: models.User):
+    """Create login response with JWT token"""
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer",
+        "user": user
+    }

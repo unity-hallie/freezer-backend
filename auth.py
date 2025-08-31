@@ -9,9 +9,17 @@ from decouple import config
 import models
 from database import get_db
 
-SECRET_KEY = config('SECRET_KEY', default="your-secret-key-change-in-production")
+# JWT Configuration - Production-ready secret management
+SECRET_KEY = config('JWT_SECRET_KEY', default="your-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = int(config('ACCESS_TOKEN_EXPIRE_MINUTES', default="30"))
+
+# Validate JWT secret in production
+if config('ENVIRONMENT', default='development').lower() == 'production':
+    if SECRET_KEY == "your-secret-key-change-in-production":
+        raise ValueError("JWT_SECRET_KEY must be set to a secure random value in production")
+    if len(SECRET_KEY) < 32:
+        raise ValueError("JWT_SECRET_KEY must be at least 32 characters long for security")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
