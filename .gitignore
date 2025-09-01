@@ -29,8 +29,14 @@ ENV/
 *.db
 *.sqlite3
 
-# Environment variables
+# Environment variables (ALL variants - keep only .env.example in git)
 .env
+.env.production
+.env.droplet
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # IDE
 .vscode/
