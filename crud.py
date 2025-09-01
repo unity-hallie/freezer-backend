@@ -263,6 +263,9 @@ def delete_location(db: Session, location_id: int):
 # Additional CRUD functions for item management
 def get_user_items(db: Session, user_id: int):
     """Get all items from user's households"""
+    # TODO: This function is a potential performance bottleneck.
+    # It iterates through households and locations, which can lead to
+    # N+1 queries. Consider using joins to optimize this.
     households = get_user_households(db, user_id)
     items = []
     for household in households:
