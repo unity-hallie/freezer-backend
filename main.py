@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -6,9 +6,23 @@ import models, schemas, crud, database
 from auth import verify_token, get_current_user
 from database import get_db
 from discord_oauth import DiscordOAuth
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
+import hashlib
+import time
 
 app = FastAPI(title="Freezer App API", version="1.0.0")
+
+# Rate limiting setup - protect against API cost spirals
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Simple in-memory cache for AI requests (prevents duplicate API calls)
+ai_cache = {}
+CACHE_TTL = 300  # 5 minutes cache
 
 security = HTTPBearer()
 
@@ -317,22 +331,68 @@ def get_user_locations(
 
 # AI Shopping List Ingestion
 @app.post("/api/ingest-shopping")
+@limiter.limit("5/minute")  # Strict rate limit - max 5 AI requests per minute per IP
 async def ingest_shopping_list(
     request: schemas.ShoppingIngestionRequest,
+    request_obj: Request,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Parse shopping list/email content using AI and create pending items
+    COST SPIRAL PROTECTION: Rate limited, cached, and size validated
     """
     from ai_shopping_parser import shopping_parser
     
-    try:
-        # Parse content with AI
-        parsed_items = shopping_parser.parse_shopping_content(
-            content=request.content,
-            source_type=request.source_type or "generic"
+    # PROTECTION 1: Input size validation (prevent massive API calls)
+    if len(request.content) > 5000:  # Reasonable limit for shopping lists
+        raise HTTPException(
+            status_code=400, 
+            detail="Content too large (max 5000 characters). Please break into smaller chunks."
         )
+    
+    if len(request.content.strip()) < 10:  # Prevent spam of tiny requests
+        raise HTTPException(
+            status_code=400, 
+            detail="Content too short (min 10 characters). Please provide actual shopping list content."
+        )
+    
+    # PROTECTION 2: Content caching (prevent duplicate API calls)
+    content_hash = hashlib.md5(f"{request.content}{request.source_type}".encode()).hexdigest()
+    cache_key = f"ai_parse_{content_hash}"
+    current_time = time.time()
+    
+    # Check cache first
+    if cache_key in ai_cache:
+        cached_result, cached_time = ai_cache[cache_key]
+        if current_time - cached_time < CACHE_TTL:
+            # Use cached result, no API call needed
+            parsed_items = cached_result
+        else:
+            # Cache expired, remove entry
+            del ai_cache[cache_key]
+            parsed_items = None
+    else:
+        parsed_items = None
+    
+    try:
+        # Only make API call if not cached
+        if parsed_items is None:
+            # Parse content with AI
+            parsed_items = shopping_parser.parse_shopping_content(
+                content=request.content,
+                source_type=request.source_type or "generic"
+            )
+            
+            # Cache the result
+            ai_cache[cache_key] = (parsed_items, current_time)
+            
+            # PROTECTION 3: Cache cleanup (prevent memory growth)
+            if len(ai_cache) > 100:  # Keep cache size reasonable
+                # Remove oldest entries
+                oldest_keys = sorted(ai_cache.keys(), key=lambda k: ai_cache[k][1])[:20]
+                for old_key in oldest_keys:
+                    del ai_cache[old_key]
         
         # Validate parsed items
         validated_items = shopping_parser.validate_items(parsed_items)
