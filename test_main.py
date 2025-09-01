@@ -45,6 +45,8 @@ def test_user_registration(setup_database):
             "full_name": test_user["full_name"]
         }
     )
+    if response.status_code != 200:
+        print(f"Registration failed with {response.status_code}: {response.text}")
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == test_user["email"]

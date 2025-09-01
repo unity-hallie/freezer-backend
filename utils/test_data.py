@@ -29,8 +29,8 @@ class PIIProtector:
         else:
             username = 'testuser'
         
-        # Use test domain
-        domain = 'test.example.local'
+        # Use valid test domain (RFC 2606 reserved for testing)
+        domain = 'test.example.com'
         timestamp = str(int(datetime.utcnow().timestamp()))[-6:]
         return f"{username}{timestamp}@{domain}"
     
@@ -145,7 +145,7 @@ def create_test_user_data(anonymize: bool = True) -> Dict:
     else:
         # For tests that specifically need non-anonymized data
         return {
-            'email': 'test@test.example.local',
+            'email': 'test@test.example.com',
             'password': 'testpass123', 
             'full_name': 'Test User'
         }

@@ -42,6 +42,20 @@ models.Base.metadata.create_all(bind=database.engine)
 def root():
     return {"message": "Freezer App API"}
 
+@app.get("/health")
+def health_check():
+    """Basic health check endpoint for deployment validation"""
+    return {
+        "status": "healthy",
+        "service": "freezer-api",
+        "version": "1.0.0"
+    }
+
+@app.get("/api/")
+def api_root():
+    """API root endpoint"""
+    return {"message": "Freezer App API v1.0.0", "status": "operational"}
+
 @app.post("/auth/register", response_model=schemas.UserResponse)
 async def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = crud.get_user_by_email(db, email=user.email)
