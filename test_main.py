@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from main import app
-from database import get_db, Base
+from database import get_db
 import models
 from utils.test_data import create_test_user_data, TestDataLimiter
 
@@ -23,18 +23,20 @@ app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def setup_database():
-    Base.metadata.create_all(bind=engine)
+    # Create all tables before each test
+    models.Base.metadata.create_all(bind=engine)
     yield
-    Base.metadata.drop_all(bind=engine)
+    # Drop all tables after each test
+    models.Base.metadata.drop_all(bind=engine)
 
 def test_read_main():
     response = client.get("/")
     assert response.status_code == 200
     assert response.json() == {"message": "Freezer App API"}
 
-def test_user_registration(setup_database):
+def test_user_registration():
     # Use PII-protected test data
     test_user = create_test_user_data()
     response = client.post(
@@ -52,7 +54,7 @@ def test_user_registration(setup_database):
     assert data["email"] == test_user["email"]
     assert "id" in data
 
-def test_user_login(setup_database):
+def test_user_login():
     # Use PII-protected test data
     test_user = create_test_user_data()
     # Register user first
@@ -65,12 +67,12 @@ def test_user_login(setup_database):
         }
     )
     
-    # Login
+    # Login with same test data
     response = client.post(
         "/auth/login",
         json={
-            "email": "test@example.com",
-            "password": "testpassword123"
+            "email": test_user["email"],
+            "password": test_user["password"]
         }
     )
     assert response.status_code == 200
@@ -78,10 +80,19 @@ def test_user_login(setup_database):
     assert "access_token" in data
     assert data["token_type"] == "bearer"
 
-def test_create_household(setup_database):
+def test_create_household():
+    # Use PII-protected test data
+    test_user = create_test_user_data()
     # Register and login
-    client.post("/auth/register", json={"email": "test@example.com", "password": "testpassword123"})
-    login_response = client.post("/auth/login", json={"email": "test@example.com", "password": "testpassword123"})
+    client.post("/auth/register", json={
+        "email": test_user["email"], 
+        "password": test_user["password"],
+        "full_name": test_user["full_name"]
+    })
+    login_response = client.post("/auth/login", json={
+        "email": test_user["email"], 
+        "password": test_user["password"]
+    })
     token = login_response.json()["access_token"]
     
     # Create household
@@ -95,10 +106,19 @@ def test_create_household(setup_database):
     assert data["name"] == "Test House"
     assert "invite_code" in data
 
-def test_get_household_locations(setup_database):
+def test_get_household_locations():
+    # Use PII-protected test data
+    test_user = create_test_user_data()
     # Setup user and household
-    client.post("/auth/register", json={"email": "test@example.com", "password": "testpassword123"})
-    login_response = client.post("/auth/login", json={"email": "test@example.com", "password": "testpassword123"})
+    client.post("/auth/register", json={
+        "email": test_user["email"], 
+        "password": test_user["password"],
+        "full_name": test_user["full_name"]
+    })
+    login_response = client.post("/auth/login", json={
+        "email": test_user["email"], 
+        "password": test_user["password"]
+    })
     token = login_response.json()["access_token"]
     
     household_response = client.post(
