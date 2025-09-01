@@ -21,6 +21,7 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     libpq5 \
+    netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies from builder
@@ -37,10 +38,15 @@ RUN chmod +x docker-entrypoint.sh
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app
+
+# Fix PATH for non-root user - copy packages to app user location
+COPY --from=builder /root/.local /home/app/.local
+RUN chown -R app:app /home/app/.local
+
 USER app
 
-# Add local Python packages to PATH
-ENV PATH=/root/.local/bin:$PATH
+# Add local Python packages to PATH for app user
+ENV PATH=/home/app/.local/bin:$PATH
 
 EXPOSE 8000
 
