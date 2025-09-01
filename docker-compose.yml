@@ -20,6 +20,14 @@ services:
     restart: unless-stopped
     volumes:
       - ./logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
 
   # PostgreSQL Database
   db:
@@ -35,6 +43,14 @@ services:
     ports:
       - "5432:5432"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
 
   # Nginx Reverse Proxy with SSL
   nginx:

@@ -61,6 +61,30 @@ chmod +x deploy-check.sh
 }
 echo -e "${GREEN}✅ Pre-flight checks passed${NC}"
 
+# Step 4.5: Database Migration Safety
+echo ""
+echo "🛡️ STEP 4.5: Database Safety Validation"
+echo "----------------------------------------"
+chmod +x deployment-safety.sh
+./deployment-safety.sh || {
+    echo -e "${RED}❌ Database safety validation failed - DEPLOYMENT BLOCKED${NC}"
+    echo -e "${RED}   This prevents breaking existing user data${NC}"
+    exit 1
+}
+echo -e "${GREEN}✅ Database safety validation passed${NC}"
+
+# Step 4.6: Cost Monitoring Validation
+echo ""
+echo "💰 STEP 4.6: Cost Monitoring & Resource Validation"
+echo "---------------------------------------------------"
+chmod +x cost-monitoring.sh
+./cost-monitoring.sh || {
+    echo -e "${YELLOW}⚠️ Cost monitoring warnings detected${NC}"
+    echo -e "${YELLOW}   Deployment can proceed but costs may be unpredictable${NC}"
+    # Don't block deployment, but warn about potential costs
+}
+echo -e "${GREEN}✅ Cost monitoring validation completed${NC}"
+
 # Step 5: Backup Current State
 echo ""
 echo "💾 STEP 5: Creating Backup"
