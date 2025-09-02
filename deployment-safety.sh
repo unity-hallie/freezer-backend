@@ -1,6 +1,7 @@
 #!/bin/bash
-# Deployment Safety Script - Prevents breaking existing users
-# Validates database integrity before and after deployment
+# Deployment Safety Script - Update Validation Only
+# Validates existing database integrity for ongoing deployments
+# NOTE: For first-time deployment setup, use first-time-deployment.sh
 
 set -e
 
@@ -10,8 +11,11 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo "🛡️  DEPLOYMENT SAFETY VALIDATION"
+echo "🛡️  DEPLOYMENT UPDATE VALIDATION"
 echo "================================="
+echo "ℹ️  This script validates existing deployments only"
+echo "ℹ️  For first-time setup, run: ./first-time-deployment.sh"
+echo ""
 
 # Function to check database connectivity and basic integrity
 check_database_health() {
@@ -67,34 +71,33 @@ except Exception as e:
     return 0
 }
 
-# Function to run database migrations safely
-run_migrations() {
+# Function to check migration status (validation only)
+check_migration_status() {
     echo ""
-    echo "🔄 Database Migration Safety"
-    echo "----------------------------"
+    echo "🔄 Migration Status Check"
+    echo "-------------------------"
     
-    # Show pending migrations
-    echo "Checking for pending migrations..."
-    python3 -m alembic current
-    python3 -m alembic heads
-    
-    # Create backup before migrations (for production)
-    if [[ "${ENVIRONMENT:-development}" == "production" ]]; then
-        echo "Creating pre-migration backup..."
-        timestamp=$(date +%Y%m%d_%H%M%S)
-        # In production, this would backup the actual database
-        echo "⚠️  Production backup would be created here: backup_${timestamp}.sql"
+    # Check current migration status
+    echo "Current migration status:"
+    if python3 -m alembic current 2>/dev/null; then
+        echo -e "${GREEN}✅ Migration status accessible${NC}"
+    else
+        echo -e "${RED}❌ Cannot access migration status - database may not be initialized${NC}"
+        echo "ℹ️  Run first-time-deployment.sh for initial setup"
+        return 1
     fi
     
-    # Run migrations
-    echo "Running database migrations..."
-    if python3 -m alembic upgrade head; then
-        echo -e "${GREEN}✅ Database migrations completed successfully${NC}"
+    # Check for pending migrations
+    echo "Checking for pending migrations..."
+    current=$(python3 -m alembic current --verbose 2>/dev/null | grep "Current revision" | cut -d' ' -f3 || echo "none")
+    head=$(python3 -m alembic heads 2>/dev/null | cut -d' ' -f1 || echo "unknown")
+    
+    if [[ "$current" != "$head" ]] && [[ "$current" != "none" ]]; then
+        echo -e "${YELLOW}⚠️  Pending migrations detected${NC}"
+        echo "ℹ️  Current: $current, Latest: $head"
+        echo "ℹ️  Consider running migrations before deployment"
     else
-        echo -e "${RED}❌ Database migration failed - ROLLING BACK${NC}"
-        # In production, this would restore from backup
-        echo "⚠️  Production rollback would be executed here"
-        return 1
+        echo -e "${GREEN}✅ Database is up to date${NC}"
     fi
     
     return 0
@@ -195,28 +198,27 @@ except Exception as e:
     return 0
 }
 
-# Main safety validation sequence
+# Main validation sequence (update deployments only)
 main() {
-    echo "Starting deployment safety validation..."
+    echo "Starting deployment update validation..."
     echo "Environment: ${ENVIRONMENT:-development}"
     echo ""
     
-    # Pre-deployment checks
+    # Validation-only checks
     if ! check_database_health; then
+        echo -e "${RED}❌ Database health check failed${NC}"
+        echo "ℹ️  If this is your first deployment, run: ./first-time-deployment.sh"
         exit 1
     fi
     
-    if ! run_migrations; then
-        exit 1
-    fi
-    
-    # Post-migration validation
-    if ! check_database_health; then
-        echo -e "${RED}❌ Post-migration health check failed - DATABASE CORRUPTION DETECTED${NC}"
+    if ! check_migration_status; then
+        echo -e "${RED}❌ Migration status check failed${NC}"
+        echo "ℹ️  Database may not be initialized. Run: ./first-time-deployment.sh"
         exit 1
     fi
     
     if ! check_session_compatibility; then
+        echo -e "${RED}❌ Session compatibility check failed${NC}"
         exit 1
     fi
     
@@ -226,12 +228,16 @@ main() {
     fi
     
     echo ""
-    echo -e "${GREEN}🎉 DEPLOYMENT SAFETY VALIDATION PASSED${NC}"
-    echo "================================="
-    echo "✅ Database migrations completed successfully"
-    echo "✅ Existing user sessions will remain valid"
-    echo "✅ No data loss detected"
-    echo "✅ Safe to proceed with deployment"
+    echo -e "${GREEN}🎉 DEPLOYMENT UPDATE VALIDATION PASSED${NC}"
+    echo "======================================"
+    echo "✅ Existing database is healthy and accessible"
+    echo "✅ Migration status verified"
+    echo "✅ User sessions will remain compatible"
+    echo "✅ No data corruption detected"
+    echo "✅ Safe to proceed with update deployment"
+    echo ""
+    echo "ℹ️  Remember: This script only validates existing deployments"
+    echo "ℹ️  For first-time setup, use: ./first-time-deployment.sh"
     
     return 0
 }
