@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 import models, schemas, auth
+from models import household_members
 import secrets
 import string
 from datetime import datetime, timedelta
@@ -262,29 +263,35 @@ def delete_location(db: Session, location_id: int):
 
 # Additional CRUD functions for item management
 def get_user_items(db: Session, user_id: int):
-    """Get all items from user's households"""
-    # TODO: This function is a potential performance bottleneck.
-    # It iterates through households and locations, which can lead to
-    # N+1 queries. Consider using joins to optimize this.
-    households = get_user_households(db, user_id)
-    items = []
-    for household in households:
-        locations = get_household_locations(db, household.id)
-        for location in locations:
-            location_items = get_location_items(db, location.id)
-            # Add household_id to each item for convenience
-            for item in location_items:
-                item.household_id = household.id
-            items.extend(location_items)
+    """Get all items from user's households - optimized with joins"""
+    # Single optimized query using joins to eliminate N+1 query problem
+    items = db.query(models.Item)\
+        .join(models.Location)\
+        .join(models.Household)\
+        .join(household_members, models.Household.id == household_members.c.household_id)\
+        .options(
+            joinedload(models.Item.location).joinedload(models.Location.household),
+            joinedload(models.Item.added_by)
+        )\
+        .filter(household_members.c.user_id == user_id)\
+        .all()
+    
+    # Add household_id to each item for convenience (backward compatibility)
+    for item in items:
+        item.household_id = item.location.household.id
+        
     return items
 
 def get_user_locations(db: Session, user_id: int):
-    """Get all locations from user's households"""
-    households = get_user_households(db, user_id)
-    locations = []
-    for household in households:
-        household_locations = get_household_locations(db, household.id)
-        locations.extend(household_locations)
+    """Get all locations from user's households - optimized with joins"""
+    # Single optimized query using joins to eliminate N+1 query problem
+    locations = db.query(models.Location)\
+        .join(models.Household)\
+        .join(household_members, models.Household.id == household_members.c.household_id)\
+        .options(joinedload(models.Location.household))\
+        .filter(household_members.c.user_id == user_id)\
+        .all()
+        
     return locations
 
 def get_location_by_name(db: Session, household_id: int, location_name: str):

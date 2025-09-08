@@ -151,3 +151,34 @@ class ShoppingIngestionResponse(BaseModel):
     parsing_log: List[dict]
     requires_review: bool
     review_instructions: str
+
+# Health Check Schemas for deployment monitoring
+class HealthCheckResponse(BaseModel):
+    database: str
+    api: str
+
+class HealthResponse(BaseModel):
+    status: str  # healthy, degraded, unhealthy
+    service: str
+    version: str  
+    timestamp: str
+    checks: HealthCheckResponse
+
+class ApiHealthStats(BaseModel):
+    total_users: Optional[int] = None
+    database_responsive: bool
+
+class ApiHealthChecks(BaseModel):
+    database_connection: str
+    database_query: str
+    cors_configured: bool
+    rate_limiting: bool
+
+class ApiHealthResponse(BaseModel):
+    service: str
+    status: str  # operational, degraded, unhealthy
+    version: str
+    timestamp: str
+    environment: str
+    checks: ApiHealthChecks
+    stats: Optional[ApiHealthStats] = None

@@ -37,9 +37,10 @@ def validate_production_config() -> None:
         )
     
     if database_url.startswith('sqlite'):
-        raise ValueError(
-            "SQLite databases are not allowed in production environment. "
-            "Use PostgreSQL for production deployments."
+        import warnings
+        warnings.warn(
+            "Using SQLite in production. Consider PostgreSQL for >100 concurrent users.",
+            UserWarning
         )
 
 

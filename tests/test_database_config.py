@@ -30,8 +30,8 @@ class TestDatabaseConfiguration:
             assert database.db_config['type'] == 'sqlite'
             assert 'test' in database.DATABASE_URL
         
-    def test_production_requires_postgresql(self):
-        """Production environment should require PostgreSQL and reject SQLite."""
+    def test_production_allows_sqlite_with_warning(self):
+        """Production environment allows SQLite for MVP but shows warning."""
         with patch.dict(os.environ, {
             'ENVIRONMENT': 'production',
             'DATABASE_URL': 'sqlite:///./app.db'
@@ -42,9 +42,10 @@ class TestDatabaseConfiguration:
                 if module in sys.modules:
                     del sys.modules[module]
             
-            # Should raise error when trying to use SQLite in production
-            with pytest.raises(ValueError, match="SQLite databases are not allowed in production"):
+            # Should allow SQLite in production (MVP mode) with warning
+            with pytest.warns(UserWarning, match="Using SQLite in production"):
                 import database
+                assert database.db_config['type'] == 'sqlite'
         
     def test_production_with_postgresql_succeeds(self):
         """Production environment should accept PostgreSQL configuration."""

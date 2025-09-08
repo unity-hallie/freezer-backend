@@ -13,6 +13,12 @@ import os
 import hashlib
 import time
 
+# Import route modules
+from routes.auth import router as auth_router
+from routes.households import router as households_router
+from routes.locations import router as locations_router  
+from routes.items import router as items_router
+
 app = FastAPI(title="Freezer App API", version="1.0.0")
 
 # Rate limiting setup - protect against API cost spirals
@@ -38,310 +44,109 @@ app.add_middleware(
 
 models.Base.metadata.create_all(bind=database.engine)
 
+# Include routers
+app.include_router(auth_router)
+app.include_router(households_router)
+app.include_router(locations_router)
+app.include_router(items_router)
+
 @app.get("/")
 def root():
     return {"message": "Freezer App API"}
 
 @app.get("/health")
-def health_check():
-    """Basic health check endpoint for deployment validation"""
-    return {
+def health_check(db: Session = Depends(get_db)):
+    """Enhanced health check endpoint with database connectivity validation"""
+    import datetime
+    from sqlalchemy import text
+    
+    health_status = {
         "status": "healthy",
         "service": "freezer-api",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "checks": {
+            "database": "unknown",
+            "api": "healthy"
+        }
     }
+    
+    # Test database connectivity
+    try:
+        result = db.execute(text("SELECT 1")).scalar()
+        if result == 1:
+            health_status["checks"]["database"] = "healthy"
+        else:
+            health_status["checks"]["database"] = "unhealthy"
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["checks"]["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "unhealthy"
+    
+    # Set appropriate HTTP status code
+    status_code = 200 if health_status["status"] == "healthy" else 503
+    
+    from fastapi import Response
+    return Response(
+        content=schemas.HealthResponse(**health_status).model_dump_json(),
+        status_code=status_code,
+        media_type="application/json"
+    )
+
+@app.get("/api/health")  
+def api_health_check(db: Session = Depends(get_db)):
+    """Detailed API health endpoint for deployment monitoring"""
+    import datetime
+    from sqlalchemy import text
+    
+    health_data = {
+        "service": "freezer-api",
+        "status": "operational", 
+        "version": "1.0.0",
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "environment": os.getenv("ENVIRONMENT", "production"),
+        "checks": {
+            "database_connection": "unknown",
+            "database_query": "unknown", 
+            "cors_configured": bool(allowed_origins),
+            "rate_limiting": bool(limiter)
+        }
+    }
+    
+    # Database connectivity test
+    try:
+        db.execute(text("SELECT 1")).scalar()
+        health_data["checks"]["database_connection"] = "healthy"
+        
+        # Test actual query capability
+        user_count = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
+        health_data["checks"]["database_query"] = "healthy"
+        health_data["stats"] = {
+            "total_users": user_count,
+            "database_responsive": True
+        }
+    except Exception as e:
+        health_data["checks"]["database_connection"] = f"unhealthy: {str(e)}"
+        health_data["checks"]["database_query"] = "failed" 
+        health_data["status"] = "degraded"
+        health_data["stats"] = {
+            "database_responsive": False
+        }
+    
+    status_code = 200 if health_data["status"] == "operational" else 503
+    
+    from fastapi import Response
+    return Response(
+        content=schemas.ApiHealthResponse(**health_data).model_dump_json(),
+        status_code=status_code,
+        media_type="application/json"
+    )
 
 @app.get("/api/")
 def api_root():
     """API root endpoint"""
     return {"message": "Freezer App API v1.0.0", "status": "operational"}
 
-@app.post("/auth/register", response_model=schemas.UserResponse)
-async def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = crud.get_user_by_email(db, email=user.email)
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    return await crud.create_user(db=db, user=user)
-
-@app.post("/auth/login")
-def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
-    return crud.authenticate_user(db, user.email, user.password)
-
-@app.get("/auth/discord/login")
-def discord_login():
-    """Get Discord OAuth authorization URL"""
-    try:
-        auth_url = DiscordOAuth.get_authorization_url()
-        return {"auth_url": auth_url}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/auth/discord/callback")
-async def discord_callback(code: str, db: Session = Depends(get_db)):
-    """Handle Discord OAuth callback"""
-    try:
-        # Exchange code for access token
-        token_data = await DiscordOAuth.exchange_code_for_token(code)
-        access_token = token_data["access_token"]
-        
-        # Get Discord user info
-        discord_user = await DiscordOAuth.get_user_info(access_token)
-        
-        # Check if user already exists by Discord ID
-        existing_user = crud.get_user_by_discord_id(db, discord_user["id"])
-        
-        if existing_user:
-            # User exists, log them in
-            return crud.create_login_response(existing_user)
-        else:
-            # Create new user from Discord data
-            email = discord_user.get("email")
-            if not email:
-                raise HTTPException(status_code=400, detail="Discord account must have a verified email")
-            
-            # Check if email already exists
-            email_user = crud.get_user_by_email(db, email)
-            if email_user:
-                # Link Discord account to existing email account
-                crud.link_discord_account(db, email_user, discord_user)
-                return crud.create_login_response(email_user)
-            else:
-                # Create new user
-                user_data = schemas.DiscordUserCreate(
-                    email=email,
-                    full_name=discord_user.get("username"),
-                    discord_id=discord_user["id"],
-                    discord_username=discord_user["username"],
-                    discord_avatar=discord_user.get("avatar")
-                )
-                new_user = await crud.create_discord_user(db, user_data)
-                return crud.create_login_response(new_user)
-                
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/users/me", response_model=schemas.UserResponse)
-def read_users_me(current_user: models.User = Depends(get_current_user)):
-    return current_user
-
-@app.post("/auth/verify-email")
-def verify_email(verification: schemas.EmailVerification, db: Session = Depends(get_db)):
-    user = crud.verify_email(db, verification.token)
-    return {"message": "Email verified successfully"}
-
-@app.post("/auth/request-password-reset")
-async def request_password_reset(request: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
-    return await crud.request_password_reset(db, request.email)
-
-@app.post("/auth/reset-password")
-def reset_password(reset: schemas.PasswordReset, db: Session = Depends(get_db)):
-    return crud.reset_password(db, reset.token, reset.new_password)
-
-@app.post("/households", response_model=schemas.HouseholdResponse)
-def create_household(
-    household: schemas.HouseholdCreate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return crud.create_household(db=db, household=household, owner_id=current_user.id)
-
-@app.get("/households", response_model=list[schemas.HouseholdResponse])
-def get_user_households(
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return crud.get_user_households(db, user_id=current_user.id)
-
-@app.post("/households/{household_id}/invite")
-async def invite_to_household(
-    household_id: int,
-    invite: schemas.HouseholdInvite,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return await crud.invite_to_household(db, household_id, invite.email, current_user.id)
-
-@app.post("/households/join", response_model=schemas.HouseholdResponse)
-def join_household(
-    join_request: schemas.JoinHousehold,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return crud.join_household(db, join_request.invite_code, current_user.id)
-
-@app.delete("/households/{household_id}/leave")
-def leave_household(
-    household_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    return crud.leave_household(db, household_id, current_user.id)
-
-@app.post("/households/{household_id}/locations", response_model=schemas.LocationResponse)
-def create_location(
-    household_id: int,
-    location: schemas.LocationCreate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    household = crud.get_household_by_id(db, household_id)
-    if not household or not crud.is_household_member(db, household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Household not found")
-    return crud.create_location(db=db, location=location, household_id=household_id)
-
-@app.get("/households/{household_id}/locations", response_model=list[schemas.LocationResponse])
-def get_household_locations(
-    household_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    if not crud.is_household_member(db, household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Household not found")
-    return crud.get_household_locations(db, household_id)
-
-@app.put("/locations/{location_id}", response_model=schemas.LocationResponse)
-def update_location(
-    location_id: int,
-    location_update: schemas.LocationCreate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    location = crud.get_location_by_id(db, location_id)
-    if not location or not crud.is_household_member(db, location.household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Location not found")
-    return crud.update_location(db, location_id, location_update)
-
-@app.delete("/locations/{location_id}")
-def delete_location(
-    location_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    location = crud.get_location_by_id(db, location_id)
-    if not location or not crud.is_household_member(db, location.household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Location not found")
-    return crud.delete_location(db, location_id)
-
-@app.post("/locations/{location_id}/items", response_model=schemas.ItemResponse)
-def create_item(
-    location_id: int,
-    item: schemas.ItemCreate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    location = crud.get_location_by_id(db, location_id)
-    if not location or not crud.is_household_member(db, location.household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Location not found")
-    return crud.create_item(db=db, item=item, location_id=location_id, user_id=current_user.id)
-
-@app.get("/locations/{location_id}/items", response_model=list[schemas.ItemResponse])
-def get_location_items(
-    location_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    location = crud.get_location_by_id(db, location_id)
-    if not location or not crud.is_household_member(db, location.household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Location not found")
-    return crud.get_location_items(db, location_id)
-
-# Additional item management endpoints
-@app.get("/items", response_model=list[schemas.ItemResponse])
-def get_user_items(
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get all items from user's households"""
-    return crud.get_user_items(db, current_user.id)
-
-@app.post("/items", response_model=schemas.ItemResponse)
-def create_item_by_location_name(
-    item: schemas.ItemCreate,
-    location_name: str = "refrigerator",
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create item by specifying location name instead of location_id"""
-    # Get user's households
-    households = crud.get_user_households(db, current_user.id)
-    if not households:
-        raise HTTPException(status_code=404, detail="No households found")
-    
-    # Use first household (for simplicity)
-    household = households[0]
-    
-    # Find or create location by name
-    location = crud.get_location_by_name(db, household.id, location_name)
-    if not location:
-        # Create default location if it doesn't exist
-        location_data = schemas.LocationCreate(
-            name=location_name.title(),
-            location_type=location_name.lower()
-        )
-        location = crud.create_location(db, location_data, household.id)
-    
-    return crud.create_item(db=db, item=item, location_id=location.id, user_id=current_user.id)
-
-@app.get("/items/{item_id}", response_model=schemas.ItemResponse)
-def get_item(
-    item_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    item = crud.get_item_by_id(db, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    
-    # Check if user has access to this item's household
-    location = crud.get_location_by_id(db, item.location_id)
-    if not location or not crud.is_household_member(db, location.household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Item not found")
-    
-    return item
-
-@app.put("/items/{item_id}", response_model=schemas.ItemResponse)
-def update_item(
-    item_id: int,
-    item_update: schemas.ItemUpdate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    item = crud.get_item_by_id(db, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    
-    # Check if user has access to this item's household
-    location = crud.get_location_by_id(db, item.location_id)
-    if not location or not crud.is_household_member(db, location.household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Item not found")
-    
-    return crud.update_item(db, item_id, item_update)
-
-@app.delete("/items/{item_id}")
-def delete_item(
-    item_id: int,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    item = crud.get_item_by_id(db, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    
-    # Check if user has access to this item's household
-    location = crud.get_location_by_id(db, item.location_id)
-    if not location or not crud.is_household_member(db, location.household_id, current_user.id):
-        raise HTTPException(status_code=404, detail="Item not found")
-    
-    crud.delete_item(db, item_id)
-    return {"message": "Item deleted successfully"}
-
-@app.get("/locations", response_model=list[schemas.LocationResponse])  
-def get_user_locations(
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get all locations from user's households"""
-    return crud.get_user_locations(db, current_user.id)
 
 # AI Shopping List Ingestion
 @app.post("/api/ingest-shopping")

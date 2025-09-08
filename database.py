@@ -19,16 +19,23 @@ def get_database_config():
             'type': 'sqlite'
         }
     
-    # Production environment - require explicit PostgreSQL configuration
+    # Production environment - allow SQLite for MVP, PostgreSQL for scale
     elif ENVIRONMENT == 'production':
         database_url = config('DATABASE_URL', default=None)
         if not database_url:
             raise ValueError("DATABASE_URL must be explicitly set for production environment")
-        if database_url.startswith('sqlite'):
-            raise ValueError("SQLite databases are not allowed in production. Use PostgreSQL.")
+        
+        db_type = 'sqlite' if database_url.startswith('sqlite') else 'postgresql'
+        
+        if db_type == 'sqlite':
+            warnings.warn(
+                "Using SQLite in production. Consider PostgreSQL for >100 concurrent users.",
+                UserWarning
+            )
+        
         return {
             'url': database_url,
-            'type': 'postgresql'
+            'type': db_type
         }
     
     # Development environment - allow both but warn about production readiness

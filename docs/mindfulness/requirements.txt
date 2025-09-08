@@ -1,0 +1,7 @@
+# Vector search dependencies for mindfulness practice
+sentence-transformers==2.2.2
+numpy>=1.21.0
+torch>=1.11.0
+
+# Optional for performance (can install separately)
+# faiss-cpu>=1.7.0  # For faster similarity search on large collections

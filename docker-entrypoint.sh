@@ -5,19 +5,15 @@ set -e
 
 echo "🚀 Starting Freezer API..."
 
-# Wait for database to be ready
-echo "⏳ Waiting for database..."
-while ! nc -z db 5432; do
-  sleep 1
-done
-echo "✅ Database is ready!"
+# Create data directory for SQLite
+mkdir -p data
 
-# Run database migrations
-echo "🗄️ Running database migrations..."
-python -c "
+# Setup database (SQLite - no external dependency)
+echo "🗄️ Setting up database..."
+python3 -c "
 import models
 import database
-print('Creating tables...')
+print('Creating SQLite database tables...')
 models.Base.metadata.create_all(bind=database.engine)
 print('✅ Database tables ready!')
 "

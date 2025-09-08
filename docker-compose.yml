@@ -9,17 +9,12 @@ services:
     container_name: freezer-api
     ports:
       - "8000:8000"
-    environment:
-      - ENVIRONMENT=production
-      - DATABASE_URL=postgresql://freezer_user:${DB_PASSWORD}@db:5432/freezer_db
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - ACCESS_TOKEN_EXPIRE_MINUTES=60
-    depends_on:
-      - db
-    restart: unless-stopped
+    env_file:
+      - .env.production
     volumes:
+      - ./data:/app/data  # SQLite database storage
       - ./logs:/app/logs
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -29,28 +24,20 @@ services:
           memory: 256M
           cpus: '0.25'
 
-  # PostgreSQL Database
-  db:
-    image: postgres:13-alpine
-    container_name: freezer-db
-    environment:
-      - POSTGRES_DB=freezer_db
-      - POSTGRES_USER=freezer_user
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.3'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
+  # PostgreSQL Database (commented out for SQLite MVP)
+  # db:
+  #   image: postgres:13-alpine
+  #   container_name: freezer-db
+  #   environment:
+  #     - POSTGRES_DB=freezer_db
+  #     - POSTGRES_USER=freezer_user
+  #     - POSTGRES_PASSWORD=${DB_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./backups:/backups
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
 
   # Nginx Reverse Proxy with SSL
   nginx:

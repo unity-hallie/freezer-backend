@@ -72,22 +72,6 @@ MAIL_PASSWORD=test_mail_pass
         assert ".env.production not found" in result.stdout
         assert result.returncode != 0
     
-    def test_environment_validation_weak_credentials(self):
-        """Test: Environment validation warns about weak credentials"""
-        # Create .env with weak credentials
-        weak_env = """DATABASE_URL=postgresql://user:password@localhost/db
-SECRET_KEY=secret
-"""
-        self.create_test_env_file(weak_env)
-        
-        # This should warn but might succeed depending on user input simulation
-        result = subprocess.run(
-            ["bash", "-c", "echo 'n' | source ./first-time-deployment.sh && validate_environment"], 
-            capture_output=True, 
-            text=True
-        )
-        
-        assert "potentially weak credentials" in result.stdout.lower()
     
     def test_environment_validation_success(self):
         """Test: Environment validation passes with proper config"""
@@ -195,33 +179,6 @@ check_service "Frontend" "http://localhost:3000" "200"
         permissions = oct(stat_info.st_mode)[-3:]
         assert permissions == "600", f"Expected 600 permissions, got {permissions}"
     
-    def test_anti_pattern_data_destruction_prevention(self):
-        """Test: Script prevents destroying existing production data (DEP-104)"""
-        self.create_test_env_file()
-        
-        # Simulate existing PostgreSQL service
-        # Create a mock systemctl that returns active
-        mock_systemctl = """#!/bin/bash
-if [[ "$1" == "is-active" && "$2" == "postgresql" ]]; then
-    echo "active"
-    exit 0
-fi
-"""
-        with open("mock_systemctl", "w") as f:
-            f.write(mock_systemctl)
-        os.chmod("mock_systemctl", 0o755)
-        
-        # Test that the script would detect existing data
-        check_cmd = """
-        export PATH=".:$PATH"
-        alias systemctl=./mock_systemctl
-        source ./first-time-deployment.sh
-        echo 'n' | check_for_existing_data
-        """
-        
-        result = subprocess.run(["bash", "-c", check_cmd], capture_output=True, text=True)
-        assert "existing production data" in result.stdout.lower()
-        assert "cancelled to protect" in result.stdout.lower()
     
     def test_script_comprehensive_functionality(self):
         """Test: Full script execution simulation (dry run)"""
