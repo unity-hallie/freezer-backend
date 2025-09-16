@@ -61,7 +61,7 @@ services:
     volumes:
       - ./ssl:/etc/letsencrypt
       - ../freezer-frontend/dist:/var/www/html
-    command: certonly --webroot --webroot-path=/var/www/html --email halsted.larsson@gmail.com --agree-tos --no-eff-email -d freaziepeazie.app
+    command: certonly --webroot --webroot-path=/var/www/html --email halsted.larsson@gmail.com --agree-tos --no-eff-email -d freeziepeazie.app
 
 volumes:
   postgres_data:
