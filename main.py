@@ -16,8 +16,9 @@ import time
 # Import route modules
 from routes.auth import router as auth_router
 from routes.households import router as households_router
-from routes.locations import router as locations_router  
+from routes.locations import router as locations_router
 from routes.items import router as items_router
+from routes.users import router as users_router
 
 app = FastAPI(title="Freezer App API", version="1.0.0")
 
@@ -49,6 +50,7 @@ app.include_router(auth_router)
 app.include_router(households_router)
 app.include_router(locations_router)
 app.include_router(items_router)
+app.include_router(users_router)
 
 @app.get("/")
 def root():
