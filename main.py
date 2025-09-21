@@ -56,6 +56,54 @@ app.include_router(users_router)
 def root():
     return {"message": "Freezer App API"}
 
+@app.get("/version")
+def version_info():
+    """Version endpoint to verify deployment state"""
+    import subprocess
+    import datetime
+    import os
+
+    # Get git commit hash
+    try:
+        git_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
+        git_short = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+        git_branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode('ascii').strip()
+        git_date = subprocess.check_output(['git', 'log', '-1', '--format=%cd', '--date=iso']).decode('ascii').strip()
+    except:
+        git_hash = "UNKNOWN (not a git repo or git not available)"
+        git_short = "UNKNOWN"
+        git_branch = "UNKNOWN"
+        git_date = "UNKNOWN"
+
+    # Get file stats for main.py to verify deployment
+    main_py_stats = os.stat(__file__)
+
+    # Check which routers are actually registered
+    registered_routes = []
+    for route in app.routes:
+        if hasattr(route, 'path'):
+            registered_routes.append(route.path)
+
+    return {
+        "service": "freezer-api",
+        "git": {
+            "commit": git_hash,
+            "commit_short": git_short,
+            "branch": git_branch,
+            "commit_date": git_date
+        },
+        "deployment": {
+            "main_py_size": main_py_stats.st_size,
+            "main_py_modified": datetime.datetime.fromtimestamp(main_py_stats.st_mtime).isoformat(),
+            "server_time": datetime.datetime.utcnow().isoformat()
+        },
+        "routes": {
+            "total_registered": len(registered_routes),
+            "has_users_router": any("/users" in path for path in registered_routes),
+            "user_routes": [r for r in registered_routes if "/user" in r.lower()]
+        }
+    }
+
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):
     """Enhanced health check endpoint with database connectivity validation"""
