@@ -56,6 +56,11 @@ app.include_router(users_router)
 def root():
     return {"message": "Freezer App API"}
 
+@app.get("/liveness")
+def liveness():
+    """Liveness probe that never touches DB or middleware."""
+    return {"status": "ok", "service": "freezer-api"}
+
 @app.get("/version")
 def version_info():
     """Version endpoint to verify deployment state"""
@@ -142,6 +147,10 @@ def health_check(db: Session = Depends(get_db)):
         status_code=status_code,
         media_type="application/json"
     )
+
+@app.get("/api/liveness")
+def api_liveness():
+    return {"status": "ok", "service": "freezer-api"}
 
 @app.get("/api/health")  
 def api_health_check(db: Session = Depends(get_db)):

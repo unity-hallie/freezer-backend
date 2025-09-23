@@ -12,6 +12,24 @@ from middleware.auth import verify_item_access, verify_location_access
 # Create router for item endpoints
 router = APIRouter(tags=["items"])
 
+# Canonical location helpers to prevent phantom names
+CANONICAL = {
+    "freezer": ("freezer", "Freezer"),
+    "fridge": ("fridge", "Fridge"),
+    "pantry": ("pantry", "Pantry"),
+}
+ALIASES = {
+    "refrigerator": "fridge",
+}
+
+def normalize_location_name(name: str) -> tuple[str, str]:
+    n = (name or "").strip().lower()
+    n = ALIASES.get(n, n)
+    if n in CANONICAL:
+        norm, pretty = CANONICAL[n]
+        return norm, pretty
+    return n, (name or "").strip().title()
+
 # Item creation under locations
 @router.post("/locations/{location_id}/items", response_model=schemas.ItemResponse)
 def create_item(
@@ -50,7 +68,9 @@ def create_item_by_location_name(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create item by specifying location name instead of location_id"""
+    """Create item by specifying location name instead of location_id.
+    Normalizes names: 'refrigerator' -> 'Fridge'; only allows canonical locations.
+    """
     # Get user's households
     households = crud.get_user_households(db, current_user.id)
     if not households:
@@ -58,18 +78,28 @@ def create_item_by_location_name(
     
     # Use first household (for simplicity)
     household = households[0]
-    
-    # Find or create location by name
-    location = crud.get_location_by_name(db, household.id, location_name)
-    if not location:
-        # Create default location if it doesn't exist
+
+    norm, pretty = normalize_location_name(location_name)
+    allowed = set(CANONICAL.keys())
+    if norm not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid location_name. Use one of: freezer, fridge, pantry")
+
+    # Prefer exact match by name or location_type
+    locations = crud.get_user_locations(db, household.id)
+    match = None
+    for loc in locations:
+        if (loc.name or "").strip().lower() == pretty.lower() or (loc.location_type or "").strip().lower() == norm:
+            match = loc
+            break
+
+    if not match:
         location_data = schemas.LocationCreate(
-            name=location_name.title(),
-            location_type=location_name.lower()
+            name=pretty,
+            location_type=norm,
         )
-        location = crud.create_location(db, location_data, household.id)
-    
-    return crud.create_item(db=db, item=item, location_id=location.id, user_id=current_user.id)
+        match = crud.create_location(db, location_data, household.id)
+
+    return crud.create_item(db=db, item=item, location_id=match.id, user_id=current_user.id)
 
 # Individual item operations
 @router.get("/items/{item_id}", response_model=schemas.ItemResponse)

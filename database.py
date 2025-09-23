@@ -71,7 +71,7 @@ except ImportError:
 if db_config['type'] == 'sqlite':
     engine = create_engine(
         DATABASE_URL, 
-        connect_args={"check_same_thread": False},
+        connect_args={"check_same_thread": False, "timeout": 5},
         echo=ENVIRONMENT == 'development'
     )
 else:  # postgresql
@@ -90,3 +90,18 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Ensure SQLite uses WAL and reasonable sync settings for concurrency
+try:
+    from sqlalchemy import event
+    if db_config['type'] == 'sqlite':
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragmas(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("PRAGMA journal_mode=WAL;")
+                cursor.execute("PRAGMA synchronous=NORMAL;")
+            finally:
+                cursor.close()
+except Exception:
+    pass
