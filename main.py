@@ -15,6 +15,7 @@ import time
 
 # Import route modules
 from routes.auth import router as auth_router
+from routes.health import router as health_router
 from routes.households import router as households_router
 from routes.locations import router as locations_router
 from routes.items import router as items_router
@@ -47,6 +48,7 @@ models.Base.metadata.create_all(bind=database.engine)
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(health_router)
 app.include_router(households_router)
 app.include_router(locations_router)
 app.include_router(items_router)

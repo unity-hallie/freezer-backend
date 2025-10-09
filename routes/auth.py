@@ -2,6 +2,7 @@
 Authentication routes
 """
 from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -39,12 +40,15 @@ def discord_login():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class DiscordCallback(BaseModel):
+    code: str
+
 @router.post("/discord/callback")
-async def discord_callback(code: str, db: Session = Depends(get_db)):
+async def discord_callback(payload: DiscordCallback, db: Session = Depends(get_db)):
     """Handle Discord OAuth callback"""
     try:
         # Exchange code for access token
-        token_data = await DiscordOAuth.exchange_code_for_token(code)
+        token_data = await DiscordOAuth.exchange_code_for_token(payload.code)
         access_token = token_data["access_token"]
         
         # Get Discord user info
@@ -90,8 +94,8 @@ def verify_email(verification: schemas.EmailVerification, db: Session = Depends(
 
 @router.post("/request-password-reset")
 @limiter.limit("5/hour")  # Prevent email spam abuse
-async def request_password_reset(request_obj: Request, request: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
-    return await crud.request_password_reset(db, request.email)
+async def request_password_reset(request: Request, payload: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
+    return await crud.request_password_reset(db, payload.email)
 
 @router.post("/reset-password")
 def reset_password(reset: schemas.PasswordReset, db: Session = Depends(get_db)):
