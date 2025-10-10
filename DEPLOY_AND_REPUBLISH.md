@@ -1,11 +1,11 @@
-# Deploy and Republish Process for freaziepeazie.app
+# Deploy and Republish Process for freeziepeazie.app
 
 ## Overview
 This document outlines the complete process for deploying and republishing the Freezer App to production. The process is designed for SQLite MVP deployment with future PostgreSQL scalability.
 
 ## Prerequisites
 - DigitalOcean droplet with SSH access
-- Domain `freaziepeazie.app` pointing to droplet IP
+- Domain `freeziepeazie.app` pointing to droplet IP
 - Local development environment with changes committed
 
 ## Deployment Process
@@ -31,10 +31,10 @@ ENVIRONMENT=test python3 -m pytest test_main.py -v
 #### 1.2 Transfer Files to Production Server
 ```bash
 # Option A: Direct SCP (if you have SSH key configured)
-scp -r . user@freaziepeazie.app:/opt/freezer-app/
+scp -r . user@freeziepeazie.app:/opt/freezer-app/
 
 # Option B: Git clone on server
-ssh user@freaziepeazie.app
+ssh user@freeziepeazie.app
 cd /opt/
 git clone https://github.com/your-username/freezer-backend.git freezer-app
 cd freezer-app
@@ -74,7 +74,7 @@ sudo docker-compose exec certbot certbot certonly \
   --webroot --webroot-path=/var/www/html \
   --email your-email@example.com \
   --agree-tos --no-eff-email \
-  -d freaziepeazie.app
+  -d freeziepeazie.app
 
 # Restart nginx with SSL
 docker-compose restart nginx
@@ -83,9 +83,9 @@ docker-compose restart nginx
 #### 1.5 Verify Deployment
 ```bash
 # Test all endpoints
-curl https://freaziepeazie.app/health
-curl https://freaziepeazie.app/api/health
-curl https://freaziepeazie.app/
+curl https://freeziepeazie.app/health
+curl https://freeziepeazie.app/api/health
+curl https://freeziepeazie.app/
 
 # Check logs
 docker-compose logs -f api
@@ -123,7 +123,7 @@ docker-compose down
 docker-compose up -d
 
 # Verify
-curl https://freaziepeazie.app/health
+curl https://freeziepeazie.app/health
 ```
 
 ## Automation Opportunities
@@ -136,7 +136,7 @@ curl https://freaziepeazie.app/health
 #!/bin/bash
 set -e
 
-echo "🚀 FREAZIEPEAZIE.APP DEPLOYMENT UPDATE"
+echo "🚀 FREEZIEPEAZIE.APP DEPLOYMENT UPDATE"
 echo "===================================="
 
 # Pull latest code
@@ -161,7 +161,7 @@ docker-compose up -d --no-deps nginx
 
 # Health check
 sleep 5
-if curl -f https://freaziepeazie.app/health > /dev/null; then
+if curl -f https://freeziepeazie.app/health > /dev/null; then
     echo "✅ Deployment successful!"
 else
     echo "❌ Deployment failed - rolling back..."
@@ -169,7 +169,7 @@ else
     exit 1
 fi
 
-echo "🎉 freaziepeazie.app updated successfully!"
+echo "🎉 freeziepeazie.app updated successfully!"
 ```
 
 #### 2. Backup Automation
@@ -196,14 +196,14 @@ echo "✅ Backup completed: $BACKUP_DIR"
 ```bash
 # health-check.sh
 #!/bin/bash
-if ! curl -f https://freaziepeazie.app/health > /dev/null 2>&1; then
-    echo "🚨 freaziepeazie.app is down!" | mail -s "Site Down Alert" admin@example.com
+if ! curl -f https://freeziepeazie.app/health > /dev/null 2>&1; then
+    echo "🚨 freeziepeazie.app is down!" | mail -s "Site Down Alert" admin@example.com
     
     # Auto-restart attempt
     docker-compose restart
     
     sleep 10
-    if curl -f https://freaziepeazie.app/health > /dev/null 2>&1; then
+    if curl -f https://freeziepeazie.app/health > /dev/null 2>&1; then
         echo "✅ Site auto-recovered" | mail -s "Site Recovery" admin@example.com
     fi
 fi

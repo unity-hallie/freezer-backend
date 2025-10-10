@@ -8,6 +8,7 @@ import schemas, crud, models
 from auth import get_current_user
 from database import get_db
 from middleware.auth import verify_item_access, verify_location_access
+from utils.emoji_map import suggest_emoji
 
 # Create router for item endpoints
 router = APIRouter(tags=["items"])
@@ -130,3 +131,53 @@ def delete_item(
     verify_item_access(item_id, current_user, db)
     crud.delete_item(db, item_id)
     return {"message": "Item deleted successfully"}
+
+
+@router.get("/items/emoji-suggestions")
+def preview_emoji_suggestions(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Preview emoji suggestions for items without an explicit emoji.
+
+    Returns a list of up to 50 example updates (id, name, old_emoji, new_emoji).
+    """
+    items = crud.get_user_items(db, current_user.id)
+    examples = []
+    for it in items:
+        if getattr(it, 'emoji', None):
+            continue
+        new = suggest_emoji(it.name, it.tags)
+        if new:
+            examples.append({
+                "id": it.id,
+                "name": it.name,
+                "old": getattr(it, 'emoji', None),
+                "new": new
+            })
+        if len(examples) >= 50:
+            break
+    return {"examples": examples, "total_pending": len([i for i in items if not getattr(i,'emoji',None)])}
+
+
+@router.post("/items/emoji-normalize")
+def apply_emoji_suggestions(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Apply emoji suggestions to items missing `emoji`.
+
+    Heuristic mapping based on item name/tags. Only fills blank emoji fields; does not override.
+    """
+    items = crud.get_user_items(db, current_user.id)
+    updated = 0
+    for it in items:
+        if getattr(it, 'emoji', None):
+            continue
+        new = suggest_emoji(it.name, it.tags)
+        if new:
+            setattr(it, 'emoji', new)
+            updated += 1
+    if updated:
+        db.commit()
+    return {"updated": updated}

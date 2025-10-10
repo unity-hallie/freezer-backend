@@ -15,7 +15,7 @@ fi
 
 # Create .env.production with production values
 cat > .env.production << 'EOF'
-# Production Environment Configuration for freaziepeazie.app
+# Production Environment Configuration for freeziepeazie.app
 # ⚠️ SECURITY: This file contains production secrets - keep secure!
 
 # Core Configuration
@@ -33,14 +33,14 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 # Web Server Configuration
-FRONTEND_URL=https://freaziepeazie.app
-ALLOWED_HOSTS=freaziepeazie.app,www.freaziepeazie.app
-CORS_ORIGINS=https://freaziepeazie.app
+FRONTEND_URL=https://freeziepeazie.app
+ALLOWED_HOSTS=freeziepeazie.app,www.freeziepeazie.app
+CORS_ORIGINS=https://freeziepeazie.app
 
 # Email Configuration (Production)
 MAIL_USERNAME=your.email@gmail.com
 MAIL_PASSWORD=your-gmail-app-password
-MAIL_FROM=noreply@freaziepeazie.app
+MAIL_FROM=noreply@freeziepeazie.app
 MAIL_FROM_NAME=Freezer App
 MAIL_PORT=587
 MAIL_SERVER=smtp.gmail.com

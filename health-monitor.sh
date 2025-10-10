@@ -1,10 +1,10 @@
 #!/bin/bash
-# Health monitoring script for freaziepeazie.app
+# Health monitoring script for freeziepeazie.app
 # Run this via crontab every 5 minutes: */5 * * * * /opt/freezer-app/health-monitor.sh
 
-SITE_URL="https://freaziepeazie.app"
+SITE_URL="https://freeziepeazie.app"
 LOG_FILE="/opt/freezer-app/logs/health-monitor.log"
-ALERT_EMAIL="admin@freaziepeazie.app"  # Change this to your email
+ALERT_EMAIL="admin@freeziepeazie.app"  # Change this to your email
 
 # Ensure log directory exists
 mkdir -p "$(dirname "$LOG_FILE")"

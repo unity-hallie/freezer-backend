@@ -1,10 +1,10 @@
 #!/bin/bash
-# Automated deployment update script for freaziepeazie.app
+# Automated deployment update script for freeziepeazie.app
 # Run this on the production server to deploy updates
 
 set -e
 
-echo "🚀 FREAZIEPEAZIE.APP DEPLOYMENT UPDATE"
+echo "🚀 FREEZIEPEAZIE.APP DEPLOYMENT UPDATE"
 echo "===================================="
 echo "Started at: $(date)"
 echo ""
@@ -124,7 +124,7 @@ fi
 # Health check with retry
 log_info "Performing health check..."
 for i in {1..5}; do
-    if curl -f -s https://freaziepeazie.app/health > /dev/null 2>&1; then
+    if curl -f -s https://freeziepeazie.app/health > /dev/null 2>&1; then
         log_success "Health check passed!"
         break
     elif curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
@@ -161,7 +161,7 @@ else
 fi
 
 # Test key endpoints
-if curl -f -s https://freaziepeazie.app/api/health > /dev/null 2>&1; then
+if curl -f -s https://freeziepeazie.app/api/health > /dev/null 2>&1; then
     log_success "API endpoint is healthy"
 else
     log_warning "API endpoint health check failed"
@@ -186,15 +186,15 @@ echo ""
 echo "🎉 DEPLOYMENT SUCCESSFUL!"
 echo "========================"
 echo "✅ Deployed commit: $NEW_COMMIT"
-echo "✅ Site: https://freaziepeazie.app"
+echo "✅ Site: https://freeziepeazie.app"
 echo "✅ Backup: $BACKUP_DIR"
 echo "✅ Completed at: $(date)"
 echo ""
 
 # Send notification (if mail is configured)
 if command -v mail >/dev/null 2>&1; then
-    echo "Deployment successful for freaziepeazie.app at $(date)" | \
-        mail -s "Deployment Success" admin@freaziepeazie.app 2>/dev/null || true
+    echo "Deployment successful for freeziepeazie.app at $(date)" | \
+        mail -s "Deployment Success" admin@freeziepeazie.app 2>/dev/null || true
 fi
 
-log_success "freaziepeazie.app updated successfully!"
+log_success "freeziepeazie.app updated successfully!"

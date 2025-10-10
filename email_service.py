@@ -4,6 +4,7 @@ import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
+from decouple import config as dconfig
 import secrets
 from typing import Optional
 
@@ -72,9 +73,15 @@ email_service = GmailEmailService()
 def generate_verification_token():
     return secrets.token_urlsafe(32)
 
-def send_verification_email(email: str, token: str, base_url: str = "http://localhost:3000") -> bool:
+def _front_base_url() -> str:
+    # Prefer explicit FRONTEND_URL, fallback to PUBLIC_FRONTEND_URL, else https domain
+    return dconfig('FRONTEND_URL', default=os.getenv('PUBLIC_FRONTEND_URL', 'https://freeziepeazie.app'))
+
+
+def send_verification_email(email: str, token: str, base_url: str = None) -> bool:
     """Send verification email using Mailgun"""
-    verification_url = f"{base_url}/verify-email?token={token}"
+    base = base_url or _front_base_url()
+    verification_url = f"{base}/verify-email?token={token}"
     
     subject = "✅ Verify your Freezer App account"
     
@@ -128,9 +135,10 @@ Freezer App - Keep your household inventory organized
     
     return email_service.send_email(email, subject, html_content, text_content)
 
-def send_password_reset_email(email: str, token: str, user_name: str = "User", base_url: str = "http://localhost:3000") -> bool:
+def send_password_reset_email(email: str, token: str, user_name: str = "User", base_url: str = None) -> bool:
     """Send password reset email using Mailgun"""
-    reset_url = f"{base_url}/reset-password?token={token}"
+    base = base_url or _front_base_url()
+    reset_url = f"{base}/reset-password?token={token}"
     
     subject = "🔑 Password Reset - Freezer App"
     
