@@ -58,3 +58,4 @@ htmlcov/
 
 # Mindfulness embeddings cache
 docs/mindfulness/search_cache/
+.venv/
