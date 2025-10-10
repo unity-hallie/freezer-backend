@@ -51,9 +51,15 @@ class HouseholdResponse(HouseholdBase):
     owner_id: int
     invite_code: Optional[str] = None
     created_at: datetime
+    discord_guild_id: Optional[str] = None
+    discord_notification_channel_id: Optional[str] = None
     
     class Config:
         from_attributes = True
+
+class HouseholdDiscordUpdate(BaseModel):
+    discord_guild_id: Optional[str] = None
+    discord_notification_channel_id: Optional[str] = None
 
 class LocationBase(BaseModel):
     name: str

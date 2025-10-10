@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status, Request
+from fastapi import FastAPI, HTTPException, Depends, status, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from routes.households import router as households_router
 from routes.locations import router as locations_router
 from routes.items import router as items_router
 from routes.users import router as users_router
+from routes.debug import router as debug_router
 
 app = FastAPI(title="Freezer App API", version="1.0.0")
 
@@ -53,6 +54,7 @@ app.include_router(households_router)
 app.include_router(locations_router)
 app.include_router(items_router)
 app.include_router(users_router)
+app.include_router(debug_router)
 
 @app.get("/")
 def root():
@@ -365,3 +367,40 @@ async def ingest_shopping_list(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@app.get("/discord/user/{discord_id}")
+async def get_user_by_discord_id(discord_id: str, db: Session = Depends(get_db)):
+    """Public endpoint to look up user by Discord ID"""
+    user = db.query(models.User).filter(models.User.discord_id == discord_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Return minimal user info needed for bot auth
+    return {
+        "id": user.id,
+        "email": user.email,
+        "discord_id": user.discord_id,
+        "discord_username": user.discord_username
+    }
+@app.post("/discord/bot-auth/{discord_id}")
+async def discord_bot_auth(
+    discord_id: str,
+    bot_secret: str = Header(..., alias="X-Bot-Secret"),
+    db: Session = Depends(get_db)
+):
+    """Bot-only endpoint: Generate session token for a Discord user"""
+    # Verify bot secret
+    expected_secret = os.getenv("BOT_AUTH_SECRET")
+    if not expected_secret or bot_secret != expected_secret:
+        raise HTTPException(status_code=403, detail="Invalid bot secret")
+    
+    # Find user by Discord ID
+    user = db.query(models.User).filter(models.User.discord_id == discord_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not linked. Please run /login first.")
+    
+    # Generate session token (reuse existing token generation)
+    from auth import create_access_token
+    access_token = create_access_token(data={"sub": user.email})
+    
+    return {"access_token": access_token, "token_type": "bearer"}

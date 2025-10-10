@@ -57,3 +57,27 @@ def leave_household(
     db: Session = Depends(get_db)
 ):
     return crud.leave_household(db, household_id, current_user.id)
+@router.patch("/{household_id}", response_model=schemas.HouseholdResponse)
+def update_household_discord(
+    household_id: int,
+    update: schemas.HouseholdDiscordUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify user is owner or member
+    household = crud.get_household_by_id(db, household_id)
+    if not household:
+        raise HTTPException(status_code=404, detail="Household not found")
+    
+    if household.owner_id != current_user.id and current_user not in household.members:
+        raise HTTPException(status_code=403, detail="Not authorized to update this household")
+    
+    # Update Discord fields
+    if update.discord_guild_id is not None:
+        household.discord_guild_id = update.discord_guild_id
+    if update.discord_notification_channel_id is not None:
+        household.discord_notification_channel_id = update.discord_notification_channel_id
+    
+    db.commit()
+    db.refresh(household)
+    return household

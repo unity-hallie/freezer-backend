@@ -45,6 +45,10 @@ class Household(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    # Discord integration fields
+    discord_guild_id = Column(String(50), nullable=True, index=True)
+    discord_notification_channel_id = Column(String(50), nullable=True)
+    
     owner = relationship("User", back_populates="owned_households")
     members = relationship("User", secondary=household_members, back_populates="household_memberships")
     locations = relationship("Location", back_populates="household")
