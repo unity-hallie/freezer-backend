@@ -2,6 +2,7 @@
 Authentication routes
 """
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from slowapi import Limiter
@@ -33,10 +34,10 @@ def login(request: Request, user: schemas.UserLogin, db: Session = Depends(get_d
 
 @router.get("/discord/login")
 def discord_login():
-    """Get Discord OAuth authorization URL"""
+    """Redirect to Discord OAuth authorization URL"""
     try:
         auth_url = DiscordOAuth.get_authorization_url()
-        return {"auth_url": auth_url}
+        return RedirectResponse(url=auth_url)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
