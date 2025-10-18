@@ -41,38 +41,35 @@ def discord_login():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-class DiscordCallback(BaseModel):
-    code: str
-
-@router.post("/discord/callback")
-async def discord_callback(payload: DiscordCallback, db: Session = Depends(get_db)):
-    """Handle Discord OAuth callback"""
+@router.get("/discord/callback")
+async def discord_callback(code: str, db: Session = Depends(get_db)):
+    """Handle Discord OAuth callback - receives code as query parameter from Discord redirect"""
     try:
         # Exchange code for access token
-        token_data = await DiscordOAuth.exchange_code_for_token(payload.code)
+        token_data = await DiscordOAuth.exchange_code_for_token(code)
         access_token = token_data["access_token"]
-        
+
         # Get Discord user info
         discord_user = await DiscordOAuth.get_user_info(access_token)
-        
+
         # Check if user already exists by Discord ID
         existing_user = crud.get_user_by_discord_id(db, discord_user["id"])
-        
+
         if existing_user:
             # User exists, log them in
-            return crud.create_login_response(existing_user)
+            login_response = crud.create_login_response(existing_user)
         else:
             # Create new user from Discord data
             email = discord_user.get("email")
             if not email:
                 raise HTTPException(status_code=400, detail="Discord account must have a verified email")
-            
+
             # Check if email already exists
             email_user = crud.get_user_by_email(db, email)
             if email_user:
                 # Link Discord account to existing email account
                 crud.link_discord_account(db, email_user, discord_user)
-                return crud.create_login_response(email_user)
+                login_response = crud.create_login_response(email_user)
             else:
                 # Create new user
                 user_data = schemas.DiscordUserCreate(
@@ -83,8 +80,13 @@ async def discord_callback(payload: DiscordCallback, db: Session = Depends(get_d
                     discord_avatar=discord_user.get("avatar")
                 )
                 new_user = await crud.create_discord_user(db, user_data)
-                return crud.create_login_response(new_user)
-                
+                login_response = crud.create_login_response(new_user)
+
+        # Redirect to frontend with token in query string or hash
+        # Frontend will extract token and store in localStorage
+        token = login_response.get("access_token", "")
+        return RedirectResponse(url=f"/?token={token}")
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
