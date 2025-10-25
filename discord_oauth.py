@@ -4,9 +4,9 @@ from decouple import config
 from fastapi import HTTPException, status
 
 # Discord OAuth Configuration
-DISCORD_CLIENT_ID = config('DISCORD_CLIENT_ID', default='')
-DISCORD_CLIENT_SECRET = config('DISCORD_CLIENT_SECRET', default='')
-DISCORD_REDIRECT_URI = config('DISCORD_REDIRECT_URI', default='http://localhost:3000/auth/discord/callback')
+DISCORD_CLIENT_ID = config('DISCORD_CLIENT_ID', default='').strip()
+DISCORD_CLIENT_SECRET = config('DISCORD_CLIENT_SECRET', default='').strip()
+DISCORD_REDIRECT_URI = config('DISCORD_REDIRECT_URI', default='http://localhost:3000/auth/discord/callback').strip()
 
 class DiscordOAuth:
     BASE_URL = "https://discord.com/api"
