@@ -52,6 +52,11 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
         # Get Discord user info
         discord_user = await DiscordOAuth.get_user_info(access_token)
 
+        # Log Discord user data for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Discord OAuth: Got user info: {discord_user}")
+
         # Check if user already exists by Discord ID
         existing_user = crud.get_user_by_discord_id(db, discord_user["id"])
 
@@ -68,7 +73,7 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
             email_user = crud.get_user_by_email(db, email)
             if email_user:
                 # Link Discord account to existing email account
-                crud.link_discord_account(db, email_user, discord_user)
+                email_user = crud.link_discord_account(db, email_user, discord_user)
                 login_response = crud.create_login_response(email_user)
             else:
                 # Create new user
