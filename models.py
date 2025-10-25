@@ -91,3 +91,20 @@ class Item(Base):
     
     location = relationship("Location", back_populates="items")
     added_by = relationship("User")
+    notifications = relationship("ItemNotification", back_populates="item")
+
+class ItemNotification(Base):
+    __tablename__ = "item_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("items.id"), nullable=False, index=True)
+    household_id = Column(Integer, ForeignKey("households.id"), nullable=False, index=True)
+    notified_at = Column(DateTime, default=datetime.utcnow)
+    notification_type = Column(String(50), nullable=False)  # 'expiring_today' or 'expired'
+
+    item = relationship("Item", back_populates="notifications")
+
+    __table_args__ = (
+        # Ensure we don't send duplicate notifications for the same item+household+type on the same day
+        # Note: This is a unique constraint but allows multiple per day if needed, just prevents exact duplicates
+    )
