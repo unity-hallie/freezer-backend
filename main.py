@@ -389,9 +389,9 @@ async def discord_bot_auth(
     db: Session = Depends(get_db)
 ):
     """Bot-only endpoint: Generate session token for a Discord user"""
-    # Verify bot secret
-    expected_secret = os.getenv("BOT_AUTH_SECRET")
-    if not expected_secret or bot_secret != expected_secret:
+    # Verify bot secret (strip whitespace from both sides)
+    expected_secret = os.getenv("BOT_AUTH_SECRET", "").strip()
+    if not expected_secret or bot_secret.strip() != expected_secret:
         raise HTTPException(status_code=403, detail="Invalid bot secret")
     
     # Find user by Discord ID
