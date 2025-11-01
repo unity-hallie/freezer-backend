@@ -85,6 +85,14 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
                     discord_avatar=discord_user.get("avatar")
                 )
                 new_user = await crud.create_discord_user(db, user_data)
+
+                # Auto-create household for new Discord users
+                await crud.create_household(
+                    db,
+                    user_id=new_user.id,
+                    name=f"{new_user.full_name or 'My'}'s Household"
+                )
+
                 login_response = crud.create_login_response(new_user)
 
         # Redirect to frontend with token in query string or hash
