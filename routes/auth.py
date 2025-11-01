@@ -61,8 +61,8 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
         existing_user = crud.get_user_by_discord_id(db, discord_user["id"])
 
         if existing_user:
-            # User exists, log them in
-            login_response = crud.create_login_response(existing_user)
+            # User exists, use them
+            user = existing_user
         else:
             # Create new user from Discord data
             email = discord_user.get("email")
@@ -73,8 +73,7 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
             email_user = crud.get_user_by_email(db, email)
             if email_user:
                 # Link Discord account to existing email account
-                email_user = crud.link_discord_account(db, email_user, discord_user)
-                login_response = crud.create_login_response(email_user)
+                user = crud.link_discord_account(db, email_user, discord_user)
             else:
                 # Create new user
                 user_data = schemas.DiscordUserCreate(
@@ -84,16 +83,18 @@ async def discord_callback(code: str, db: Session = Depends(get_db)):
                     discord_username=discord_user["username"],
                     discord_avatar=discord_user.get("avatar")
                 )
-                new_user = await crud.create_discord_user(db, user_data)
+                user = await crud.create_discord_user(db, user_data)
 
-                # Auto-create household for new Discord users
-                await crud.create_household(
-                    db,
-                    user_id=new_user.id,
-                    name=f"{new_user.full_name or 'My'}'s Household"
-                )
+        # Ensure user has a household (create if missing)
+        households = crud.get_user_households(db, user.id)
+        if not households:
+            household_schema = schemas.HouseholdCreate(
+                name=f"{user.full_name or 'My'}'s Household"
+            )
+            await crud.create_household(db, household_schema, user.id)
 
-                login_response = crud.create_login_response(new_user)
+        # Generate login response
+        login_response = crud.create_login_response(user)
 
         # Redirect to frontend with token in query string or hash
         # Frontend will extract token and store in localStorage
